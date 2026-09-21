@@ -1,13 +1,14 @@
 const express = require("express");
 const { randomUUID } = require("node:crypto");
+const { loadIncidents, saveIncidents } = require("./storage");
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
-// Temporary storage. Restarting the server clears this array.
-const incidents = [];
+// Load previously saved incidents when the server starts.
+let incidents = loadIncidents();
 
 const allowedSeverities = ["low", "medium", "high", "critical"];
 
@@ -68,7 +69,11 @@ app.post("/incidents", (req, res) => {
     updatedAt: now,
   };
 
-  incidents.push(incident);
+  const updatedIncidents = [...incidents, incident];
+
+    // Save successfully before updating memory or returning success.
+    saveIncidents(updatedIncidents);
+    incidents = updatedIncidents;
 
   return res.status(201).json({
     message: "Incident created successfully.",
