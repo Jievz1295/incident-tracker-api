@@ -11,6 +11,7 @@ app.use(express.json());
 let incidents = loadIncidents();
 
 const allowedSeverities = ["low", "medium", "high", "critical"];
+const allowedStatuses = ["open", "investigating", "resolved"];
 
 app.get("/health", (req, res) => {
   res.status(200).json({
@@ -22,9 +23,22 @@ app.get("/health", (req, res) => {
 
 // List all incidents.
 app.get("/incidents", (req, res) => {
-  res.status(200).json({
-    count: incidents.length,
-    data: incidents,
+  const { status } = req.query;
+
+  if (status !== undefined && !allowedStatuses.includes(status)) {
+    return res.status(400).json({
+      error: "Status must be open, investigating, or resolved.",
+    });
+  }
+
+  const filteredIncidents =
+    status === undefined
+      ? incidents
+      : incidents.filter((incident) => incident.status === status);
+
+  return res.status(200).json({
+    count: filteredIncidents.length,
+    data: filteredIncidents,
   });
 });
 
@@ -79,6 +93,84 @@ app.post("/incidents", (req, res) => {
     message: "Incident created successfully.",
     data: incident,
   });
+});
+
+// Retrieve one incident by ID.
+app.get("/incidents/:id", (req, res) => {
+  const incident = incidents.find(
+    (item) => item.id === req.params.id
+  );
+
+  if (!incident) {
+    return res.status(404).json({
+      error: "Incident not found.",
+    });
+  }
+
+  return res.status(200).json({
+    data: incident,
+  });
+});
+
+// Update only an incident's status.
+app.patch("/incidents/:id", (req, res) => {
+  const incident = incidents.find(
+    (item) => item.id === req.params.id
+  );
+
+  if (!incident) {
+    return res.status(404).json({
+      error: "Incident not found.",
+    });
+  }
+
+  const { status } = req.body || {};
+
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({
+      error: "Status must be open, investigating, or resolved.",
+    });
+  }
+
+  const updatedIncident = {
+    ...incident,
+    status,
+    updatedAt: new Date().toISOString(),
+  };
+
+  const updatedIncidents = incidents.map((item) =>
+    item.id === incident.id ? updatedIncident : item
+  );
+
+  saveIncidents(updatedIncidents);
+  incidents = updatedIncidents;
+
+  return res.status(200).json({
+    message: "Incident status updated.",
+    data: updatedIncident,
+  });
+});
+
+// Delete one incident by ID.
+app.delete("/incidents/:id", (req, res) => {
+  const incident = incidents.find(
+    (item) => item.id === req.params.id
+  );
+
+  if (!incident) {
+    return res.status(404).json({
+      error: "Incident not found.",
+    });
+  }
+
+  const updatedIncidents = incidents.filter(
+    (item) => item.id !== incident.id
+  );
+
+  saveIncidents(updatedIncidents);
+  incidents = updatedIncidents;
+
+  return res.status(204).send();
 });
 
 // Keep this AFTER all valid routes.
